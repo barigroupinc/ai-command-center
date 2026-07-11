@@ -1,15 +1,18 @@
 # AI Command Center
 
 A self-hosted, installable PWA that sends one prompt to a Claude "manager" agent,
-which splits it into subtasks, runs them in parallel across Claude, Gemini, and
-GPT, and merges the results into a single answer. Single-password login, dark
-mode, mobile-first chat UI with live per-agent status badges.
+which splits it into subtasks, runs them in parallel across Claude and a free
+Pollinations.ai-backed agent, and merges the results into a single answer.
+Single-password login, dark mode, mobile-first chat UI with live per-agent
+status badges.
 
 ## Stack
 
 - **Backend**: Node.js, Express, `ws` (WebSocket), SQLite via `better-sqlite3`
-- **Agents**: `server/agents/{claude,gemini,gpt}.js` — one file per provider, same `{ run(prompt) }` interface
-- **Orchestrator**: `server/orchestrator.js` — Claude splits the task into JSON subtasks, runs them with `Promise.allSettled`, merges into a final answer
+- **Agents**: `server/agents/{claude,free}.js` — one file per provider
+  - `claude.js` — Anthropic SDK, requires `ANTHROPIC_API_KEY`
+  - `free.js` — [Pollinations.ai](https://pollinations.ai) free text API (`text.pollinations.ai`), **no API key required**; supports `deepseek` (default), `qwen-coder`, and `kimi` models, selectable per subtask by the orchestrator
+- **Orchestrator**: `server/orchestrator.js` — Claude splits the task into JSON subtasks (choosing "claude" or "free" + a model per subtask), runs them with `Promise.allSettled`, merges into a final answer
 - **Auth**: single app password (bcrypt) + JWT in an httpOnly cookie
 - **Frontend**: `public/` — plain HTML/CSS/vanilla JS, installable PWA (manifest + service worker)
 - **Process manager**: PM2 (`ecosystem.config.js`)
@@ -26,8 +29,7 @@ server/
   ws.js             authenticated WebSocket broadcast
   agents/
     claude.js       Anthropic SDK, model claude-sonnet-4-6
-    gemini.js       @google/genai SDK
-    gpt.js          OpenAI SDK, model from OPENAI_MODEL
+    free.js         Pollinations.ai text API (no key), deepseek/qwen-coder/kimi
   routes/
     auth.js         POST /api/auth/login, /logout
     tasks.js        GET/POST /api/tasks
@@ -47,17 +49,18 @@ Before running anything, copy `.env.example` to `.env` and fill in:
 | Variable            | Required | Notes                                                        |
 | ------------------- | -------- | ------------------------------------------------------------- |
 | `ANTHROPIC_API_KEY`  | yes      | used by the Claude agent and the orchestrator manager/merge   |
-| `OPENAI_API_KEY`     | yes*     | used by the GPT agent (*task fails gracefully per-agent if missing) |
-| `OPENAI_MODEL`       | no       | defaults to `gpt-4o-mini` if unset                            |
-| `GEMINI_API_KEY`     | yes*     | used by the Gemini agent (*same graceful-failure behavior)    |
 | `APP_PASSWORD_HASH`  | yes      | bcrypt hash of your login password — see below                |
 | `JWT_SECRET`         | yes      | long random string, e.g. `openssl rand -hex 32`               |
 | `PORT`               | no       | defaults to `3000`                                             |
 
+The `free` agent needs no configuration — it calls Pollinations.ai's public,
+keyless text endpoint directly.
+
 The server refuses to start if `JWT_SECRET` or `APP_PASSWORD_HASH` is missing.
-If a provider's API key is missing, that agent returns an error for its
-subtask instead of crashing the whole task — the orchestrator still merges
-whatever succeeded.
+If `ANTHROPIC_API_KEY` is missing, task creation fails at the split step
+(Claude drives both the split and merge steps). If the `free` agent's HTTP
+call fails for a given subtask, that subtask returns an error instead of
+crashing the whole task — the orchestrator still merges whatever succeeded.
 
 ### Generate `APP_PASSWORD_HASH`
 
@@ -117,7 +120,7 @@ sudo cp .env.example .env
 sudo nano .env
 ```
 
-Fill in the API keys, `JWT_SECRET` (`openssl rand -hex 32`), and
+Fill in `ANTHROPIC_API_KEY`, `JWT_SECRET` (`openssl rand -hex 32`), and
 `APP_PASSWORD_HASH` (`node scripts/hash-password.js 'your-password'`).
 
 ### 4. Start with PM2
@@ -175,7 +178,11 @@ chat/task history.
 
 - The orchestrator's split/merge steps both call the Claude agent — if
   `ANTHROPIC_API_KEY` is missing, task creation will fail at the split step.
-- Subtask agent assignment is decided by the Claude manager per task; each
-  agent is used at most once per task.
+- Subtask agent assignment (and, for the `free` agent, which model —
+  `deepseek`, `qwen-coder`, or `kimi`) is decided by the Claude manager per
+  task; each agent is used at most once per task.
+- The `free` agent has no SLA or rate-limit guarantees since it's a public,
+  keyless service — treat it as best-effort. Failures there don't fail the
+  whole task; the merge step covers gaps from general knowledge.
 - WebSocket connections at `/ws` require the same auth cookie as the REST
   API — unauthenticated upgrade requests are rejected with 401.

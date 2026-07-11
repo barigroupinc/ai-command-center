@@ -94,12 +94,17 @@ function getOrCreateTaskEl(taskId, promptText) {
   return createTaskEl(taskId, promptText);
 }
 
+const AGENT_LABELS = {
+  claude: 'Claude',
+  free: 'Free (DeepSeek/Qwen)',
+};
+
 function upsertBadge(els, agent, status) {
   let badge = els.badgeMap.get(agent);
   if (!badge) {
     const node = badgeTemplate.content.cloneNode(true);
     badge = node.querySelector('.badge');
-    badge.querySelector('.badge-name').textContent = agent;
+    badge.querySelector('.badge-name').textContent = AGENT_LABELS[agent] || agent;
     els.badges.appendChild(badge);
     els.badgeMap.set(agent, badge);
   }

@@ -1,16 +1,18 @@
 const claude = require('./agents/claude');
-const gemini = require('./agents/gemini');
-const gpt = require('./agents/gpt');
+const free = require('./agents/free');
 const db = require('./db');
 
-const AGENTS = { claude, gemini, gpt };
+const AGENT_NAMES = ['claude', 'free'];
+const FREE_MODELS = ['deepseek', 'qwen-coder', 'kimi'];
 
-const SPLIT_SYSTEM = `You are a task orchestrator manager for a multi-agent AI system with three worker agents: "claude", "gemini", and "gpt".
-Given a user task, break it into 1 to 3 parallel subtasks that independent agents can work on at the same time. If the task is simple or doesn't benefit from splitting, return a single subtask assigned to "claude".
+const SPLIT_SYSTEM = `You are a task orchestrator manager for a multi-agent AI system with two worker agents: "claude" and "free".
+"free" runs on Pollinations.ai's free text API (no cost, no key) and can use one of these models: "deepseek" (general purpose, default), "qwen-coder" (best for code-related subtasks), "kimi" (alternative general purpose).
+Given a user task, break it into 1 or 2 parallel subtasks that independent agents can work on at the same time. If the task is simple or doesn't benefit from splitting, return a single subtask assigned to "claude".
 Respond with ONLY valid JSON, no prose, no markdown code fences, in exactly this shape:
-{"subtasks":[{"agent":"claude","instruction":"..."}]}
+{"subtasks":[{"agent":"claude","instruction":"..."},{"agent":"free","model":"deepseek","instruction":"..."}]}
 Rules:
-- "agent" must be one of: "claude", "gemini", "gpt".
+- "agent" must be one of: "claude", "free".
+- "model" is only relevant when agent is "free"; it must be one of "deepseek", "qwen-coder", "kimi" — pick "qwen-coder" for code-heavy subtasks, otherwise "deepseek". Omit "model" for the "claude" agent.
 - Use each agent at most once.
 - Each "instruction" must be a complete, self-contained instruction (the worker agent cannot see the original task or other subtasks).`;
 
@@ -33,7 +35,13 @@ async function splitTask(prompt) {
     parsed = { subtasks: [{ agent: 'claude', instruction: prompt }] };
   }
   const subtasks = Array.isArray(parsed.subtasks)
-    ? parsed.subtasks.filter((s) => s && AGENTS[s.agent] && s.instruction)
+    ? parsed.subtasks
+        .filter((s) => s && AGENT_NAMES.includes(s.agent) && s.instruction)
+        .map((s) => ({
+          agent: s.agent,
+          instruction: s.instruction,
+          model: s.agent === 'free' && FREE_MODELS.includes(s.model) ? s.model : undefined,
+        }))
     : [];
   if (subtasks.length === 0) {
     return [{ agent: 'claude', instruction: prompt }];
@@ -44,6 +52,21 @@ async function splitTask(prompt) {
     seen.add(s.agent);
     return true;
   });
+}
+
+async function runAgent(agent, instruction, model) {
+  if (agent === 'claude') {
+    return claude.run(instruction);
+  }
+  if (agent === 'free') {
+    try {
+      const { text, meta } = await free.run(instruction, model);
+      return { output: text, error: null, meta };
+    } catch (err) {
+      return { output: null, error: err.message || String(err) };
+    }
+  }
+  return { output: null, error: `unknown agent: ${agent}` };
 }
 
 function insertRun(taskId, agent, instruction) {
@@ -65,10 +88,10 @@ async function runSubtasks(taskId, subtasks, onUpdate) {
   const runs = subtasks.map((s) => {
     const runId = insertRun(taskId, s.agent, s.instruction);
     onUpdate && onUpdate({ runId, agent: s.agent, status: 'running', subtask: s.instruction });
-    return { runId, agent: s.agent, instruction: s.instruction };
+    return { runId, agent: s.agent, instruction: s.instruction, model: s.model };
   });
 
-  const settled = await Promise.allSettled(runs.map((r) => AGENTS[r.agent].run(r.instruction)));
+  const settled = await Promise.allSettled(runs.map((r) => runAgent(r.agent, r.instruction, r.model)));
 
   return runs.map((r, i) => {
     const outcome = settled[i];
@@ -114,4 +137,4 @@ async function orchestrate(taskId, prompt, onUpdate) {
   return finalAnswer;
 }
 
-module.exports = { orchestrate, AGENTS };
+module.exports = { orchestrate, AGENT_NAMES };
