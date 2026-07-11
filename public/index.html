@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>AI Command Center</title>
+  <meta name="theme-color" content="#0b0f14" />
+  <meta name="description" content="Multi-agent AI orchestration console" />
+  <link rel="manifest" href="/manifest.json" />
+  <link rel="icon" href="/icons/icon.svg" type="image/svg+xml" />
+  <link rel="apple-touch-icon" href="/icons/icon.svg" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <link rel="stylesheet" href="/style.css" />
+</head>
+<body>
+  <div id="login-screen" class="screen">
+    <form id="login-form" class="login-card">
+      <h1>AI Command Center</h1>
+      <p class="subtitle">Enter the app password to continue</p>
+      <input id="login-password" type="password" placeholder="Password" autocomplete="current-password" required />
+      <button type="submit">Unlock</button>
+      <p id="login-error" class="error" hidden></p>
+    </form>
+  </div>
+
+  <div id="app-screen" class="screen" hidden>
+    <header class="app-header">
+      <div class="brand">
+        <span class="brand-dot"></span>
+        AI Command Center
+      </div>
+      <div class="header-actions">
+        <span id="conn-status" class="conn-status" title="Connection status"></span>
+        <button id="logout-btn" class="icon-btn" title="Log out">&#9211;</button>
+      </div>
+    </header>
+
+    <main id="chat-log" class="chat-log"></main>
+
+    <form id="prompt-form" class="prompt-bar">
+      <textarea id="prompt-input" rows="1" placeholder="Describe a task for the agents..." required></textarea>
+      <button type="submit" id="send-btn" class="send-btn" title="Send">&#10148;</button>
+    </form>
+  </div>
+
+  <template id="task-template">
+    <div class="task">
+      <div class="bubble user-bubble"></div>
+      <div class="agent-badges"></div>
+      <div class="bubble assistant-bubble" hidden></div>
+    </div>
+  </template>
+
+  <template id="badge-template">
+    <span class="badge">
+      <span class="badge-dot"></span>
+      <span class="badge-name"></span>
+    </span>
+  </template>
+
+  <script src="/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,23 @@
+{
+  "name": "ai-command-center",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Multi-agent AI orchestration command center (Claude, Gemini, GPT)",
+  "main": "server/index.js",
+  "scripts": {
+    "start": "node server/index.js",
+    "hash-password": "node scripts/hash-password.js"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.32.0",
+    "@google/genai": "^0.3.0",
+    "bcrypt": "^5.1.1",
+    "better-sqlite3": "^11.3.0",
+    "cookie-parser": "^1.4.6",
+    "dotenv": "^16.4.5",
+    "express": "^4.21.0",
+    "jsonwebtoken": "^9.0.2",
+    "openai": "^4.63.0",
+    "ws": "^8.18.0"
+  }
+}
